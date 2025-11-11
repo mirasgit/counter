@@ -1,29 +1,48 @@
 import telebot
+import threading
 import schedule
 import time
-from datetime import datetime
+from datetime import date
+import pytz
 
 TOKEN = "8480403879:AAEMjk3sIeRkMBRG82FBHKqw7Sm6B4JwcmQ"
-CHAT_ID = 892077871 # без кавычек, просто число
-TARGET_DATE = datetime(2077, 1, 1)  # дата до которой идёт отсчёт
-
 bot = telebot.TeleBot(TOKEN)
 
-def send_countdown():
-    today = datetime.now()
-    remaining = (TARGET_DATE - today).days
-    if remaining > 0:
-        message = f"До {TARGET_DATE.strftime('%d.%m.%Y')} осталось {remaining} дней! ⏳"
-    elif remaining == 0:
-        message = "Сегодня тот самый день! 🎉"
-    else:
-        message = f"Дата уже прошла {abs(remaining)} дней назад."
-    bot.send_message(CHAT_ID, message)
+# 🔹 целевая дата для отсчёта
+target_date = date(2026, 1, 1)
 
-# Запускаем каждый день в 09:00
-schedule.every().day.at("09:00").do(send_countdown)
+# 🔹 словарь пользователей, чтобы бот знал, кому писать каждый день
+users = set()
 
-# Бесконечный цикл
-while True:
-    schedule.run_pending()
-    time.sleep(60)
+# 🔹 при старте добавляем пользователя в список
+@bot.message_handler(commands=['start'])
+def start(message):
+    users.add(message.chat.id)
+    bot.send_message(message.chat.id, "Привет! Я буду писать тебе каждый день в 9 утра ☀️")
+
+# 🔹 функция ежедневной рассылки
+def send_daily_message():
+    today = date.today()
+    days_left = (target_date - today).days
+
+    for user_id in users:
+        bot.send_message(user_id, "☀️ Доброе утро!")
+        bot.send_message(user_id, f"📅 Сегодня {today.strftime('%d.%m.%Y')}")
+        bot.send_message(user_id, f"⏳ До {target_date.strftime('%d.%m.%Y')} осталось {days_left} дней!")
+        bot.send_message(user_id, "Не забывай про свои цели")
+        time.sleep(1)
+
+# 🔹 планировщик (каждый день в 9:00 по времени Астаны)
+def schedule_jobs():
+    tz = pytz.timezone("Asia/Almaty")
+    schedule.every().day.at("10:00").do(send_daily_message)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(30)
+
+# 🔹 запуск планировщика в отдельном потоке
+threading.Thread(target=schedule_jobs, daemon=True).start()
+
+print("Бот запущен...")
+bot.polling()
